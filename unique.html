@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arjun Jamgade | Terminal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;600&display=swap');
+
+        :root {
+            --bg-color: #050505;
+            --terminal-bg: rgba(10, 10, 10, 0.95);
+            --primary-color: #0f0; /* Hacker Green */
+            --secondary-color: #0ff; /* Cyan */
+            --text-dim: #008f11;
+            --alert: #ff0055;
+            --warning: #ffbd2e;
+            --font-stack: 'Fira Code', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            font-family: var(--font-stack);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            transition: filter 0.5s ease, background-color 0.2s;
+        }
+
+        /* Matrix Mode Effect */
+        body.matrix-mode {
+            filter: hue-rotate(90deg) contrast(1.2);
+            --primary-color: #00ff41;
+            --secondary-color: #008f11;
+        }
+
+        /* Destruct Mode Effect */
+        body.destruct-mode {
+            animation: shake 0.1s infinite;
+            background-color: #200;
+        }
+        body.destruct-mode .terminal-window {
+            border-color: red;
+            box-shadow: 0 0 50px red;
+        }
+        body.destruct-mode * {
+            color: red !important;
+            text-shadow: 2px 0 0 black;
+        }
+
+        #bg-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.1) 50%,
+                rgba(0,0,0,0.1)
+            );
+            background-size: 100% 4px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .glow-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.7);
+            z-index: 11;
+            pointer-events: none;
+        }
+
+        .terminal-window {
+            position: relative;
+            z-index: 5;
+            width: 90%;
+            max-width: 1000px;
+            height: 85vh;
+            background: var(--terminal-bg);
+            border: 1px solid var(--primary-color);
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            backdrop-filter: blur(5px);
+            transition: all 0.2s ease;
+        }
+
+        /* Glitch Effect */
+        .glitch-active {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both infinite;
+            border-color: var(--alert);
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .terminal-header {
+            background: #111;
+            padding: 8px 15px;
+            border-bottom: 1px solid var(--text-dim);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--secondary-color);
+        }
+
+        .window-controls span {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 5px;
+        }
+        .red { background: #ff5f56; }
+        .yellow { background: #ffbd2e; }
+        .green { background: #27c93f; }
+
+        .terminal-body {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            font-size: 1rem;
+            line-height: 1.5;
+            scrollbar-width: thin;
+            scrollbar-color: var(--text-dim) #111;
+        }
+
+        .terminal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        .terminal-body::-webkit-scrollbar-track {
+            background: #111;
+        }
+        .terminal-body::-webkit-scrollbar-thumb {
+            background-color: var(--text-dim);
+            border-radius: 4px;
+        }
+
+        a {
+            color: var(--secondary-color);
+            text-decoration: none;
+            border-bottom: 1px dashed var(--secondary-color);
+            transition: all 0.3s ease;
+        }
+        a:hover {
+            background: var(--secondary-color);
+            color: #000;
+        }
+
+        .command-line {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .prompt {
+            color: var(--secondary-color);
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        #user-input {
+            background: transparent;
+            border: none;
+            color: var(--primary-color);
+            font-family: var(--font-stack);
+            font-size: 1rem;
+            flex: 1;
+            outline: none;
+            caret-color: var(--primary-color);
+        }
+
+        .output-line {
+            margin-bottom: 10px;
+            white-space: pre-wrap;
+        }
+
+        .system-msg { color: var(--text-dim); }
+        .highlight { color: var(--secondary-color); font-weight: bold; }
+        .heading { color: var(--warning); font-weight: bold; margin-top: 15px; display: block; border-bottom: 1px solid var(--text-dim); width: fit-content;}
+        .error { color: var(--alert); }
+        .ascii-art { font-size: 10px; line-height: 10px; color: var(--text-dim); margin: 20px 0; }
+        .directory { color: #5e5eff; font-weight: bold; }
+        .file { color: var(--primary-color); }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .card {
+            border: 1px solid var(--text-dim);
+            padding: 15px;
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
+        }
+        .card h3 { color: var(--secondary-color); margin-bottom: 5px; }
+        .card .meta { font-size: 0.8rem; color: #888; margin-bottom: 8px; display: block; font-style: italic;}
+
+        .skill-container { margin-bottom: 8px; }
+        .skill-label { display: flex; justify-content: space-between; margin-bottom: 2px; }
+        .progress-bar {
+            height: 10px;
+            background: #111;
+            border: 1px solid var(--text-dim);
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--secondary-color);
+            width: 0;
+            transition: width 1s ease-in-out;
+            box-shadow: 0 0 10px var(--secondary-color);
+        }
+
+        .typing::after {
+            content: '█';
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        @media (max-width: 600px) {
+            .terminal-window {
+                width: 100%;
+                height: 100%;
+                border-radius: 0;
+                border: none;
+            }
+            body { padding: 0; }
+            .ascii-art { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+    <div class="scanlines"></div>
+    <div class="glow-overlay"></div>
+
+    <div class="terminal-window" id="term-window">
+        <div class="terminal-header">
+            <div class="title">usr/bin/arjun_portfolio.exe</div>
+            <div class="window-controls">
+                <span class="green"></span>
+                <span class="yellow"></span>
+                <span class="red"></span>
+            </div>
+        </div>
+        <div class="terminal-body" id="terminal-body" onclick="document.getElementById('user-input').focus()">
+            <div id="output"></div>
+            <div class="command-line" id="input-area" style="display: none;">
+                <span class="prompt" id="prompt-text">visitor@arjun:~$</span>
+                <input type="text" id="user-input" autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- COMPLETE RESUME DATA ---
+        const profile = {
+            name: "Arjun Jamgade",
+            role: "Astronomy Science Researcher Student",
+            phone: "+91 9019664381",
+            location: "Nagpur, MH 440001 - India",
+            email: "hulka9702@gmail.com",
+            website: "astroclub.space",
+            blog: "childrentips.wordpress.com",
+            summary: "Dynamic Astronomy Science Researcher with a proven track record in scientific writing and analytical thinking. Creator of the successful Astroclub.space, fostering collaboration and engagement in the astronomy community. Adept at problem-solving and programming, with a strong ability to work in team environments and drive innovative projects that enhance understanding of complex scientific concepts. Tech-savvy innovator with hands-on experience in emerging technologies.",
+            socials: [
+                { platform: "YouTube", handle: "@scientificspell1" },
+                { platform: "Stack Exchange", handle: "1684 Rep (Active Contributor)" },
+                { platform: "Quora", handle: "ScientistAJ" },
+                { platform: "Discord", handle: "science_aj" },
+                { platform: "Skool", handle: "Profile Available" }
+            ]
+        };
+
+        const education = [
+            {
+                institution: "NIOS",
+                details: "Secondary Education (Grade 8) - Nagpur (Pursuing)",
+                focus: "Focus on Science and Mathematics"
+            }
+        ];
+
+        const skills = {
+            core: ["Scientific Writing", "Analytical Thinking", "Astronomy & Physics", "Problem-Solving"],
+            soft: ["Team Collaboration", "Adaptability", "Project Management", "Communication"],
+            tech: [
+                { name: "Programming Languages", level: 85 },
+                { name: "IoT Fundamentals", level: 80 },
+                { name: "Cybersecurity Awareness", level: 75 },
+                { name: "Advanced Touch Typing (70+ WPM)", level: 98 }
+            ]
+        };
+
+        const languages = [
+            "English (Fluent/Proficient)",
+            "Hindi",
+            "Marathi",
+            "Japanese (Basic)"
+        ];
+
+        const experience = [
+            {
+                role: "Ambassador",
+                org: "International Astronomy and Astrophysics Competition (IAAC)",
+                date: "Present",
+                desc: "Officially appointed to represent the IAAC, promoting astronomical education and encouraging student participation in international competitions."
+            },
+            {
+                role: "Founder & Content Creator",
+                org: "Astroclub.space",
+                date: "Present",
+                desc: "Created and managed the astronomy club website and community. Produces educational scientific content for the YouTube channel regarding astronomy and physics."
+            },
+            {
+                role: "Scientist & Researcher",
+                org: "Independent",
+                date: "Present",
+                desc: "Conducted independent research in astronomy, maintaining high standards of scientific inquiry."
+            },
+            {
+                role: "Community Contributor",
+                org: "Astronomy Stack Exchange",
+                date: "Present",
+                desc: "Active contributor achieving 1684 reputation. Engages in solving complex astronomy queries and fostering community knowledge."
+            },
+            {
+                role: "Student Mentor/Trainer",
+                org: "DIYA Labs",
+                date: "2025",
+                desc: "Trained school students in association with DIYA."
+            }
+        ];
+
+        const certifications = [
+            { name: "Certified AI-Driven Professional", org: "AI Be10x", date: "Dec 2025" },
+            { name: "IoT and Fundamentals for Chandrayaan Rover", org: "DIYA Edulabs Pvt. Ltd.", date: "2025" },
+            { name: "Cybersecurity Skilling Course", org: "Tech Mahindra (Skill India Digital Hub)", date: "2025" },
+            { name: "Basic Japanese Language", org: "Ramaiya Vidyaniketan School", date: "2025" }
+        ];
+
+        const awards = [
+            "2026: 3rd Zonal Rank (Karnataka & Kerala Region) - UIGKO, Unified Council",
+            "2026: School Rank 1 - SOF National Science Olympiad (NSO)",
+            "2025: Silver Honour - International Astronomy and Astrophysics Competition (IAAC)",
+            "2025: Third Prize - Quiz Competition, IGCAR & IARP",
+            "2025: Second Prize - Raghava Talenthub Golden Jubilee Quiz, ISRO & Jawaharlal Nehru Planetarium",
+            "2025: Rank 1 (National) - SOF STEM Olympiad",
+            "2025: Rank 3 (National) - BOF Science Olympiad",
+            "2025: Rank 2 (State) - BOF Mathematics Olympiad (Class Rank 1)",
+            "2025: Finalist (Participated in Round 2) - HCL Jigsaw Competition",
+            "2025: Participant (Cleared Round 1) - Robotics Competition, Nagarjuna University",
+            "2025: Bronze Medal - International Green Warrior Olympiad (IGWO), Crest Olympiads",
+            "2025: Finalist - National Automobile Olympiad, ASDC",
+            "2025: Gold Medal - Global Mathematical Talent Probe, IFSE, Certificate of Honour",
+            "2024: Rank 2 (School) - SOF International Mathematics Olympiad",
+            "2024: Merit Certificate - Green Olympiad",
+            "2022: School Rank 5 - SOF National Science Olympiad",
+            "2021: Gold Medal - SOF National Science Olympiad",
+            "2021: Zonal Rank 5 - SOF National Science Olympiad",
+            "2020: Gold Medal - SOF National International Mathematics Olympiad",
+            "2020: Silver Medal - SOF National Science Olympiad",
+            "2020: Gold Medal - SOF National Cyber Olympiad",
+            "2020: Silver Medal - SOF National Cyber Olympiad"
+        ];
+
+        const earlyAchievements = [
+            "2019: Winner (Various) - Skavli International School (Best in: Skavli's Got Talent, Show and Tell, First Place in Football)",
+            "2018: Winner (Various) - Skavli International School (Best in: English Recitation, Fancy Dress, Art Competition, Memory Game)",
+            "2018: Project Excellence - EuroKids Pre-School (Solar System Project Making)",
+            "2016-17: Sports Excellence - EuroKids Pre-School (Tripasya Skill and Creeping Inchworm sports)"
+        ];
+
+        // --- STATE & FILE SYSTEM ---
+        let commandHistory = [];
+        let historyIndex = -1;
+        let currentPath = ["home", "visitor"];
+        let isWarping = false; // For warp drive effect
+
+        // File system mapped to data
+        const fileSystem = {
+            name: "root",
+            type: "dir",
+            children: {
+                "home": {
+                    type: "dir",
+                    children: {
+                        "visitor": {
+                            type: "dir",
+                            children: {
+                                "resume_sections": { 
+                                    type: "dir", 
+                                    children: { 
+                                        "experience.txt": { type: "file" },
+                                        "education.txt": { type: "file" },
+                                        "awards.log": { type: "file" },
+                                        "early_achievements.old": { type: "file" },
+                                        "certifications.crt": { type: "file" }
+                                    }
+                                },
+                                "about.txt": { type: "file" },
+                                "skills.exe": { type: "file" },
+                                "contact.msg": { type: "file" }
+                            }
+                        }
+                    }
+                },
+                "bin": {
+                    type: "dir",
+                    children: {
+                        "sudo": { type: "file" },
+                        "ls": { type: "file" },
+                        "matrix": { type: "file" },
+                        "whoami": { type: "file" },
+                        "warp": { type: "file" },
+                        "destruct": { type: "file" }
+                    }
+                }
+            }
+        };
+
+        // --- DOM & ANIMATION ---
+        const output = document.getElementById('output');
+        const input = document.getElementById('user-input');
+        const inputArea = document.getElementById('input-area');
+        const terminalBody = document.getElementById('terminal-body');
+        const promptText = document.getElementById('prompt-text');
+
+        function scrollToBottom() {
+            terminalBody.scrollTop = terminalBody.scrollHeight;
+        }
+
+        async function typeHTML(htmlContent, speed = 1) { // Faster default speed
+            const div = document.createElement('div');
+            div.className = 'output-line typing';
+            div.style.visibility = 'hidden';
+            div.innerHTML = htmlContent;
+            output.appendChild(div);
+
+            const textNodes = [];
+            const walk = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
+            let n;
+            while(n = walk.nextNode()) textNodes.push(n);
+
+            const originalTexts = textNodes.map(node => node.nodeValue);
+            textNodes.forEach(node => node.nodeValue = '');
+            div.style.visibility = 'visible';
+
+            for (let i = 0; i < textNodes.length; i++) {
+                const node = textNodes[i];
+                const text = originalTexts[i];
+                for (let char of text) {
+                    node.nodeValue += char;
+                    if(Math.random() > 0.5) scrollToBottom(); // Optimize scroll calls
+                    await new Promise(r => setTimeout(r, speed));
+                }
+            }
+            div.classList.remove('typing');
+            scrollToBottom();
+        }
+
+        async function typeLine(text, speed = 10) {
+             const div = document.createElement('div');
+             div.className = 'output-line typing';
+             div.textContent = "";
+             output.appendChild(div);
+             for (let i = 0; i < text.length; i++) {
+                 div.textContent += text.charAt(i);
+                 await new Promise(r => setTimeout(r, speed));
+             }
+             div.classList.remove('typing');
+             scrollToBottom();
+        }
+
+        function getDirectory(pathArray) {
+            let current = fileSystem;
+            for (let dir of pathArray) {
+                if (current.children && current.children[dir]) current = current.children[dir];
+                else return null;
+            }
+            return current;
+        }
+
+        function updatePrompt() {
+            let pathStr = "~";
+            if (currentPath.length > 2) pathStr = "~/" + currentPath.slice(2).join("/");
+            else if (currentPath.length < 2) pathStr = "/";
+            promptText.textContent = `visitor@arjun:${pathStr}$`;
+        }
+
+        // --- COMMAND PROCESSING ---
+        async function processCommand(cmd) {
+            const rawCmd = cmd.trim();
+            const args = rawCmd.split(' ');
+            const command = args[0].toLowerCase();
+            
+            if (rawCmd) {
+                commandHistory.push(rawCmd);
+                historyIndex = commandHistory.length;
+            }
+
+            const cmdDiv = document.createElement('div');
+            cmdDiv.className = 'output-line';
+            cmdDiv.innerHTML = `<span class="prompt">${promptText.textContent}</span> ${rawCmd}`;
+            output.appendChild(cmdDiv);
+
+            if (rawCmd.toLowerCase() === "hack the planet") {
+                document.getElementById('term-window').classList.add('glitch-active');
+                await typeLine("INITIATING GLOBAL HACK SEQUENCE...", 30);
+                setTimeout(() => {
+                    document.getElementById('term-window').classList.remove('glitch-active');
+                    typeLine("Access Denied. Nice try.", 20);
+                }, 2000);
+                return;
+            }
+
+            switch (command) {
+                case 'help':
+                    await typeHTML(`
+<span class="highlight">AVAILABLE COMMANDS:</span>
+  <span class="secondary">about</span>      Full profile & bio
+  <span class="secondary">experience</span> Work & research history
+  <span class="secondary">skills</span>     Tech & soft skills
+  <span class="secondary">awards</span>     Full list of honors (Long list)
+  <span class="secondary">certs</span>      Certifications & Courses
+  <span class="secondary">early</span>      Early Achievements (2016-2019)
+  <span class="secondary">edu</span>        Education details
+  <span class="secondary">contact</span>    Contact info & socials
+  <span class="secondary">warp</span>       <span class="highlight">[NEW]</span> Engage Hyperdrive
+  <span class="secondary">destruct</span>   <span class="highlight">[NEW]</span> Self Destruct Sequence
+  <span class="secondary">matrix</span>     Toggle matrix mode
+  <span class="secondary">ls</span>         List directory contents
+  <span class="secondary">cd [dir]</span>   Change directory
+  <span class="secondary">clear</span>      Clear screen
+`);
+                    break;
+                
+                case 'about':
+                    await typeHTML(`
+<span class="heading">USER PROFILE</span>
+<span class="highlight">NAME:</span>     ${profile.name}
+<span class="highlight">ROLE:</span>     ${profile.role}
+<span class="highlight">LOC:</span>      ${profile.location}
+<span class="highlight">LANG:</span>     ${languages.join(", ")}
+
+<span class="heading">PROFESSIONAL SUMMARY</span>
+${profile.summary}
+`);
+                    break;
+
+                case 'edu':
+                    let eduHTML = `<span class="heading">EDUCATION</span>`;
+                    education.forEach(e => {
+                        eduHTML += `
+                        <div class="card" style="margin-top:10px;">
+                            <h3>${e.institution}</h3>
+                            <span class="meta">${e.details}</span>
+                            <p>${e.focus}</p>
+                        </div>`;
+                    });
+                    await typeHTML(eduHTML, 5);
+                    break;
+
+                case 'experience':
+                case 'projects':
+                    let expHTML = `<span class="heading">EXPERIENCE & PROJECTS</span><div class="card-grid">`;
+                    experience.forEach(e => {
+                        expHTML += `
+                        <div class="card">
+                            <h3>${e.role}</h3>
+                            <span class="meta">${e.org} | ${e.date}</span>
+                            <p>${e.desc}</p>
+                        </div>`;
+                    });
+                    expHTML += '</div>';
+                    await typeHTML(expHTML, 1);
+                    break;
+
+                case 'skills':
+                    let skillHTML = `<span class="heading">TECHNICAL ARSENAL</span>`;
+                    
+                    // Tech Skills
+                    skillHTML += '<div class="card-grid" style="grid-template-columns: 1fr;">';
+                    skills.tech.forEach(s => {
+                        skillHTML += `
+                        <div class="skill-container">
+                            <div class="skill-label"><span>${s.name}</span><span>${s.level}%</span></div>
+                            <div class="progress-bar"><div class="progress-fill" style="width:${s.level}%"></div></div>
+                        </div>`;
+                    });
+                    skillHTML += '</div>';
+
+                    // Core & Soft Lists
+                    skillHTML += `<br><span class="highlight">CORE COMPETENCIES:</span> ${skills.core.join(" • ")}`;
+                    skillHTML += `<br><span class="highlight">SOFT SKILLS:</span> ${skills.soft.join(" • ")}`;
+                    
+                    await typeHTML(skillHTML, 3);
+                    break;
+
+                case 'awards':
+                    let awdHTML = `<span class="heading">HONORS & AWARDS DATABASE</span><ul style="list-style:none; padding-left:0;">`;
+                    awards.forEach(a => {
+                        awdHTML += `<li style="margin-bottom:6px; padding-left:15px; border-left:2px solid #333;">${a}</li>`;
+                    });
+                    awdHTML += '</ul>';
+                    await typeHTML(awdHTML, 1); // Fast typing for long lists
+                    break;
+
+                case 'early':
+                    let earlyHTML = `<span class="heading">EARLY ACHIEVEMENTS (2016-2019)</span><ul style="list-style:none; padding-left:0;">`;
+                    earlyAchievements.forEach(a => {
+                        earlyHTML += `<li style="margin-bottom:6px; color:#aaa;">> ${a}</li>`;
+                    });
+                    earlyHTML += '</ul>';
+                    await typeHTML(earlyHTML, 2);
+                    break;
+
+                case 'certs':
+                    let certHTML = `<span class="heading">CERTIFICATIONS</span><div class="card-grid">`;
+                    certifications.forEach(c => {
+                        certHTML += `
+                        <div class="card">
+                            <h3>${c.name}</h3>
+                            <span class="meta">${c.org} | ${c.date}</span>
+                        </div>`;
+                    });
+                    certHTML += '</div>';
+                    await typeHTML(certHTML, 2);
+                    break;
+
+                case 'contact':
+                    await typeHTML(`
+<span class="heading">COMMUNICATION UPLINK</span>
+> <span class="highlight">Email:</span> <a href="mailto:${profile.email}">${profile.email}</a>
+> <span class="highlight">Phone:</span> ${profile.phone}
+> <span class="highlight">Web:</span>   <a href="https://${profile.website}" target="_blank">${profile.website}</a>
+> <span class="highlight">Blog:</span>  <a href="https://${profile.blog}" target="_blank">${profile.blog}</a>
+
+<span class="highlight">SOCIAL CHANNELS:</span>
+` + profile.socials.map(s => `> ${s.platform}: ${s.handle}`).join('<br>'));
+                    break;
+                
+                // EASTER EGGS -----------------------------------
+                
+                case 'warp':
+                case 'hyperdrive':
+                    isWarping = !isWarping;
+                    if(isWarping) {
+                        await typeLine("ENGAGING HYPERDRIVE... HOLD ON!");
+                    } else {
+                        await typeLine("Disengaging hyperdrive. Systems normalizing.");
+                    }
+                    break;
+
+                case 'destruct':
+                case 'rm -rf /':
+                    document.body.classList.add('destruct-mode');
+                    await typeLine("WARNING: SELF-DESTRUCT SEQUENCE INITIATED.", 50);
+                    await typeLine("3...", 1000);
+                    await typeLine("2...", 1000);
+                    await typeLine("1...", 1000);
+                    await typeLine("GOODBYE.", 500);
+                    output.innerHTML = ""; // Blackout
+                    document.body.style.backgroundColor = "black";
+                    document.getElementById('term-window').style.display = 'none';
+                    document.querySelector('.scanlines').style.display = 'none';
+                    
+                    // Reboot logic
+                    setTimeout(() => {
+                        document.body.classList.remove('destruct-mode');
+                        document.body.style.backgroundColor = "";
+                        document.getElementById('term-window').style.display = 'flex';
+                        document.querySelector('.scanlines').style.display = 'block';
+                        output.innerHTML = "";
+                        bootSequence();
+                    }, 3000);
+                    return; // Stop processing
+
+                case 'brew coffee':
+                    await typeHTML(`
+<br>
+    ;,'
+    _o_
+  /     \\  <span class="error">Error 418: I'm a teapot.</span>
+ |       |
+  \\_..._/
+`);
+                    break;
+
+                case '42':
+                case 'meaning of life':
+                    await typeLine("The Answer to the Ultimate Question of Life, the Universe, and Everything.");
+                    break;
+
+                case 'sudo':
+                    const subCmd = args[1] ? args[1] : "";
+                    if (subCmd === "make") {
+                         await typeLine("Make it yourself.");
+                    } else if (subCmd === "login") {
+                         await typeLine("Nice try. Biometrics required.");
+                    } else {
+                        await typeLine("visitor is not in the sudoers file. This incident will be reported to Arjun.");
+                    }
+                    break;
+                
+                // ------------------------------------------------
+
+                // File System Commands
+                case 'ls':
+                    const dir = getDirectory(currentPath);
+                    if (dir && dir.children) {
+                        let outputStr = "";
+                        for (let [key, val] of Object.entries(dir.children)) {
+                            if (val.type === 'dir') outputStr += `<span class="directory">${key}/</span>  `;
+                            else outputStr += `<span class="file">${key}</span>  `;
+                        }
+                        await typeHTML(outputStr);
+                    } else {
+                        await typeLine("Error: Cannot list directory.");
+                    }
+                    break;
+                
+                case 'pwd':
+                    await typeLine("/" + currentPath.join("/"));
+                    break;
+                
+                case 'cd':
+                    const target = args[1];
+                    if (!target || target === "~") {
+                        currentPath = ["home", "visitor"];
+                    } else if (target === "..") {
+                        if (currentPath.length > 0) currentPath.pop();
+                    } else if (target === "/") {
+                        currentPath = [];
+                    } else {
+                        const currentDir = getDirectory(currentPath);
+                        if (currentDir && currentDir.children[target] && currentDir.children[target].type === 'dir') {
+                            currentPath.push(target);
+                        } else {
+                            await typeLine(`bash: cd: ${target}: No such directory`);
+                        }
+                    }
+                    updatePrompt();
+                    break;
+                
+                case 'whoami':
+                    await typeLine("visitor (guest access)");
+                    break;
+
+                case 'matrix':
+                    document.body.classList.toggle('matrix-mode');
+                    await typeLine("Visual matrix mode toggled.");
+                    break;
+
+                case 'clear':
+                    output.innerHTML = '';
+                    return; 
+                case '':
+                    break;
+                default:
+                    await typeLine(`Command '${command}' not found. Type 'help' for available commands.`);
+            }
+            scrollToBottom();
+        }
+
+        // --- INPUT LISTENER ---
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const cmd = this.value;
+                this.value = '';
+                processCommand(cmd);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    this.value = commandHistory[historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    this.value = commandHistory[historyIndex];
+                } else {
+                    historyIndex = commandHistory.length;
+                    this.value = '';
+                }
+            }
+        });
+
+        // --- BACKGROUND PARTICLES ---
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+        let cx, cy;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            cx = width / 2;
+            cy = height / 2;
+        }
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 2;
+                this.z = Math.random() * width; // For warp depth
+            }
+            
+            update() {
+                if (isWarping) {
+                    // Warp Drive Logic
+                    this.x = (this.x - cx) * 1.05 + cx;
+                    this.y = (this.y - cy) * 1.05 + cy;
+                    
+                    // Reset if out of bounds
+                    if (this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
+                        this.x = Math.random() * width;
+                        this.y = Math.random() * height;
+                        // Bias towards center for better effect
+                        this.x = (this.x - cx) * 0.1 + cx;
+                        this.y = (this.y - cy) * 0.1 + cy;
+                    }
+                } else {
+                    // Normal Float Logic
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    if (this.x < 0 || this.x > width) this.vx *= -1;
+                    if (this.y < 0 || this.y > height) this.vy *= -1;
+                }
+            }
+            
+            draw() {
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--primary-color').trim();
+                ctx.strokeStyle = ctx.fillStyle;
+                
+                if (isWarping) {
+                    // Draw streaks
+                    ctx.lineWidth = this.size;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    // Draw line towards center
+                    let tailX = (this.x - cx) * 0.9 + cx;
+                    let tailY = (this.y - cy) * 0.9 + cy;
+                    ctx.lineTo(tailX, tailY);
+                    ctx.stroke();
+                } else {
+                    // Draw dots
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            const count = Math.min(window.innerWidth / 15, 100);
+            for (let i = 0; i < count; i++) particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, width, height);
+            
+            // In warp mode, we don't draw connecting lines, just streaks
+            if (!isWarping) {
+                const lineColor = getComputedStyle(document.body).getPropertyValue('--primary-color').trim();
+                for (let i = 0; i < particles.length; i++) {
+                    for (let j = i + 1; j < particles.length; j++) {
+                        const dx = particles[i].x - particles[j].x;
+                        const dy = particles[i].y - particles[j].y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < 120) {
+                            ctx.strokeStyle = lineColor;
+                            ctx.globalAlpha = 1 - distance / 120;
+                            ctx.lineWidth = 0.5;
+                            ctx.beginPath();
+                            ctx.moveTo(particles[i].x, particles[i].y);
+                            ctx.lineTo(particles[j].x, particles[j].y);
+                            ctx.stroke();
+                            ctx.globalAlpha = 1.0;
+                        }
+                    }
+                }
+            }
+
+            particles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animateParticles);
+        }
+
+        window.addEventListener('resize', () => { resize(); initParticles(); });
+
+        // --- BOOT SEQUENCE ---
+        const bootText = [
+            "Initializing kernel...",
+            "Loading bio-metrics for Subject: Arjun Jamgade...",
+            "Mounting file system...",
+            "Connecting to Astroclub.space uplink...",
+            "Decrypting resume data... Success.",
+            "System Ready.",
+            " "
+        ];
+
+        async function bootSequence() {
+            for (let line of bootText) await typeLine(line, 15);
+            
+            const banner = `
+     _    ____       _ _   _ _   _ 
+    / \\  |  _ \\     | | | | | \\ | |
+   / _ \\ | |_) | _  | | | | |  \\| |
+  / ___ \\|  _ < | |_| | |_| | |\\  |
+ /_/   \\_\\_| \\_\\ \\___/ \\___/|_| \\_|
+            `;
+            const pre = document.createElement('pre');
+            pre.className = "ascii-art";
+            pre.textContent = banner;
+            output.appendChild(pre);
+
+            await typeLine("Welcome, Operator. Type 'help' to access the database.", 10);
+            inputArea.style.display = 'flex';
+            input.focus();
+            updatePrompt();
+        }
+
+        resize();
+        initParticles();
+        animateParticles();
+        bootSequence();
+
+    </script>
+</body>
+</html>
